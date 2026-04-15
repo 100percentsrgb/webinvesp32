@@ -21,7 +21,7 @@
 #define OLED_I2C_ADDR 0x3C
 #define OLED_SCAN_DISPLAY_DURATION 3000 // milliseconds
 #define OLED_STATUS_UPDATE_INTERVAL 2000 // milliseconds
-#define OLED_STARTUP_DELAY 700 // milliseconds
+#define OLED_STARTUP_DELAY 700 // milliseconds (startup splash visibility)
 #define I2C_FAST_MODE_CLOCK 400000
 #define MIN_VALID_UNIX_TIME 1000000000
 
@@ -450,7 +450,7 @@ bool isFirebaseConfigured() {
 
 String getCurrentTimestamp() {
   time_t now = time(nullptr);
-  if (now > MIN_VALID_UNIX_TIME) {
+  if (now >= MIN_VALID_UNIX_TIME) {
     struct tm timeInfo;
     localtime_r(&now, &timeInfo);
     char timeBuffer[24];
@@ -542,7 +542,7 @@ void displayInventoryInfo(String barcode, bool sentToFirebase, String sendStatus
 void clearOLEDAfterDelay() {
   if (!isOLEDReady || oledDisplayTimeout == 0) return;
 
-  if ((unsigned long)(millis() - oledDisplayTimeout) >= OLED_SCAN_DISPLAY_DURATION) {
+  if ((millis() - oledDisplayTimeout) >= OLED_SCAN_DISPLAY_DURATION) {
     oledDisplayTimeout = 0;
     displayDeviceStatus();
   }
@@ -1613,7 +1613,7 @@ void loop() {
   // Monitor WiFi connection setiap 10 detik
   checkWiFiConnection();
   clearOLEDAfterDelay();
-  if (oledDisplayTimeout == 0 && (unsigned long)(millis() - lastOLEDStatusUpdate) >= OLED_STATUS_UPDATE_INTERVAL) {
+  if (oledDisplayTimeout == 0 && (millis() - lastOLEDStatusUpdate) >= OLED_STATUS_UPDATE_INTERVAL) {
     displayDeviceStatus();
     lastOLEDStatusUpdate = millis();
   }
