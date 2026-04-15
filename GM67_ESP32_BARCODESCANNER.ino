@@ -490,7 +490,7 @@ void displayDeviceStatus() {
   oledDisplay.print("WiFi: ");
   oledDisplay.println(isWiFiConnected ? "Connected" : "Disconnected");
   oledDisplay.print("Firebase: ");
-  if (strlen(deviceConfig.firebaseUrl) == 0) {
+  if (deviceConfig.firebaseUrl[0] == '\0') {
     oledDisplay.println("Not set");
   } else {
     oledDisplay.println((isWiFiConnected && isOnline) ? "Connected" : "Disconnected");
@@ -502,7 +502,10 @@ void displayDeviceStatus() {
 
 void displayBarcodeScan(String code, String type, bool sentToFirebase, String sendStatus) {
   if (!isOLEDReady) return;
-  String finalSendStatus = sendStatus.length() > 0 ? sendStatus : (sentToFirebase ? "Success" : "Failed");
+  String finalSendStatus = sendStatus;
+  if (finalSendStatus.length() == 0) {
+    finalSendStatus = sentToFirebase ? "Success" : "Failed";
+  }
 
   oledDisplay.clearDisplay();
   oledDisplay.setTextSize(1);
