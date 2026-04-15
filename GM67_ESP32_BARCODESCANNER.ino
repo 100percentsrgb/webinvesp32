@@ -130,6 +130,7 @@ String getModeString(ScannerMode mode); // New: Get mode as string
 bool isValidNIM(String input); // New: Validate NIM format
 bool isFirebaseConfigured();
 String getCurrentTimestamp();
+String getSendStatusLabel(bool sentToFirebase, String sendStatus);
 void initOLED();
 void displayDeviceStatus();
 void displayBarcodeScan(String code, String type, bool sentToFirebase, String sendStatus);
@@ -461,6 +462,13 @@ String getCurrentTimestamp() {
   return String(millis() / 1000) + "s";
 }
 
+String getSendStatusLabel(bool sentToFirebase, String sendStatus) {
+  if (!sendStatus.isEmpty()) {
+    return sendStatus;
+  }
+  return sentToFirebase ? "Success" : "Failed";
+}
+
 void initOLED() {
   Wire.begin(OLED_SDA_PIN, OLED_SCL_PIN);
   Wire.setClock(I2C_FAST_MODE_CLOCK);
@@ -491,7 +499,7 @@ void displayDeviceStatus() {
   oledDisplay.setCursor(0, 0);
   oledDisplay.println("ESP32 Barcode");
   oledDisplay.print("Mode: ");
-  oledDisplay.println(currentMode == MODE_ATTENDANCE ? "Attendance" : "Inventory");
+  oledDisplay.println(getModeString(currentMode));
   oledDisplay.print("WiFi: ");
   oledDisplay.println(isWiFiConnected ? "Connected" : "Disconnected");
   oledDisplay.print("Firebase: ");
@@ -507,10 +515,7 @@ void displayDeviceStatus() {
 
 void displayBarcodeScan(String code, String type, bool sentToFirebase, String sendStatus) {
   if (!isOLEDReady) return;
-  String finalSendStatus = sendStatus;
-  if (finalSendStatus.isEmpty()) {
-    finalSendStatus = sentToFirebase ? "Success" : "Failed";
-  }
+  String finalSendStatus = getSendStatusLabel(sentToFirebase, sendStatus);
 
   oledDisplay.clearDisplay();
   oledDisplay.setTextSize(1);
@@ -518,7 +523,7 @@ void displayBarcodeScan(String code, String type, bool sentToFirebase, String se
   oledDisplay.setCursor(0, 0);
   oledDisplay.println("Barcode Detected");
   oledDisplay.print("Mode: ");
-  oledDisplay.println(currentMode == MODE_ATTENDANCE ? "Attendance" : "Inventory");
+  oledDisplay.println(getModeString(currentMode));
   oledDisplay.print(type);
   oledDisplay.print(": ");
   oledDisplay.println(code);
