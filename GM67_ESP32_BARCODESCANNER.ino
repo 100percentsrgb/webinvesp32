@@ -4,12 +4,26 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <time.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
 #define RXD2 16
 #define TXD2 17
 #define EEPROM_SIZE 1024
 #define WIFI_CONFIG_ADDR 0
 #define DEVICE_CONFIG_ADDR 512
+#define OLED_SDA_PIN 21
+#define OLED_SCL_PIN 22
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+#define OLED_I2C_ADDR 0x3C
+#define OLED_SCAN_DISPLAY_DURATION 3000 // milliseconds
+#define OLED_STATUS_UPDATE_INTERVAL 2000 // milliseconds
+#define OLED_STARTUP_DELAY 700 // milliseconds (startup splash visibility)
+#define I2C_FAST_MODE_CLOCK 400000
+#define MIN_VALID_UNIX_TIME 1000000000
 
 // WiFi Configuration structure
 struct WiFiConfig {
@@ -45,6 +59,10 @@ unsigned long scanCount = 0;
 unsigned long bootTime = 0; // Tambahkan boot time
 unsigned long lastWiFiCheck = 0; // Tambahkan WiFi monitoring
 bool isOnline = false; // Status online/offline
+bool isOLEDReady = false;
+unsigned long oledDisplayTimeout = 0;
+unsigned long lastOLEDStatusUpdate = 0;
+Adafruit_SSD1306 oledDisplay(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // Mode switching variables
 enum ScannerMode {
@@ -110,6 +128,15 @@ void checkWiFiConnection(); // Tambahkan fungsi monitoring WiFi
 void setDeviceOffline(); // Tambahkan fungsi offline
 String getModeString(ScannerMode mode); // New: Get mode as string
 bool isValidNIM(String input); // New: Validate NIM format
+bool isFirebaseConfigured();
+String getCurrentTimestamp();
+String getSendStatusLabel(bool sentToFirebase, String sendStatus);
+void initOLED();
+void displayDeviceStatus();
+void displayBarcodeScan(String code, String type, bool sentToFirebase, String sendStatus);
+void displayAttendanceInfo(String nim, bool sentToFirebase, String sendStatus);
+void displayInventoryInfo(String barcode, bool sentToFirebase, String sendStatus);
+void clearOLEDAfterDelay();
 
 
 void saveWiFiConfig() {
@@ -416,6 +443,114 @@ bool isValidNIM(String input) {
   }
   
   return true;
+}
+
+bool isFirebaseConfigured() {
+  return deviceConfig.firebaseUrl[0] != '\0';
+}
+
+String getCurrentTimestamp() {
+  time_t now = time(nullptr);
+  if (now >= MIN_VALID_UNIX_TIME) {
+    struct tm timeInfo;
+    localtime_r(&now, &timeInfo);
+    char timeBuffer[24];
+    strftime(timeBuffer, sizeof(timeBuffer), "%H:%M:%S", &timeInfo);
+    return String(timeBuffer);
+  }
+
+  return String(millis() / 1000) + "s";
+}
+
+String getSendStatusLabel(bool sentToFirebase, String sendStatus) {
+  if (!sendStatus.isEmpty()) {
+    return sendStatus;
+  }
+  return sentToFirebase ? "Success" : "Failed";
+}
+
+void initOLED() {
+  Wire.begin(OLED_SDA_PIN, OLED_SCL_PIN);
+  Wire.setClock(I2C_FAST_MODE_CLOCK);
+
+  if (!oledDisplay.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDR)) {
+    Serial.println("❌ OLED SSD1306 init failed");
+    isOLEDReady = false;
+    return;
+  }
+
+  isOLEDReady = true;
+  oledDisplay.clearDisplay();
+  oledDisplay.setTextSize(1);
+  oledDisplay.setTextColor(SSD1306_WHITE);
+  oledDisplay.setCursor(0, 0);
+  oledDisplay.println("ESP32 Scanner");
+  oledDisplay.println("OLED Ready");
+  oledDisplay.display();
+  delay(OLED_STARTUP_DELAY);
+}
+
+void displayDeviceStatus() {
+  if (!isOLEDReady) return;
+
+  oledDisplay.clearDisplay();
+  oledDisplay.setTextSize(1);
+  oledDisplay.setTextColor(SSD1306_WHITE);
+  oledDisplay.setCursor(0, 0);
+  oledDisplay.println("ESP32 Barcode");
+  oledDisplay.print("Mode: ");
+  oledDisplay.println(getModeString(currentMode));
+  oledDisplay.print("WiFi: ");
+  oledDisplay.println(isWiFiConnected ? "Connected" : "Disconnected");
+  oledDisplay.print("Firebase: ");
+  if (!isFirebaseConfigured()) {
+    oledDisplay.println("Not set");
+  } else {
+    oledDisplay.println((isWiFiConnected && isOnline) ? "Connected" : "Disconnected");
+  }
+  oledDisplay.print("Scan#: ");
+  oledDisplay.println(scanCount);
+  oledDisplay.display();
+}
+
+void displayBarcodeScan(String code, String type, bool sentToFirebase, String sendStatus) {
+  if (!isOLEDReady) return;
+  String finalSendStatus = getSendStatusLabel(sentToFirebase, sendStatus);
+
+  oledDisplay.clearDisplay();
+  oledDisplay.setTextSize(1);
+  oledDisplay.setTextColor(SSD1306_WHITE);
+  oledDisplay.setCursor(0, 0);
+  oledDisplay.println("Barcode Detected");
+  oledDisplay.print("Mode: ");
+  oledDisplay.println(getModeString(currentMode));
+  oledDisplay.print(type);
+  oledDisplay.print(": ");
+  oledDisplay.println(code);
+  oledDisplay.print("Time: ");
+  oledDisplay.println(getCurrentTimestamp());
+  oledDisplay.print("Send: ");
+  oledDisplay.println(finalSendStatus);
+  oledDisplay.display();
+
+  oledDisplayTimeout = millis();
+}
+
+void displayAttendanceInfo(String nim, bool sentToFirebase, String sendStatus) {
+  displayBarcodeScan(nim, "NIM", sentToFirebase, sendStatus);
+}
+
+void displayInventoryInfo(String barcode, bool sentToFirebase, String sendStatus) {
+  displayBarcodeScan(barcode, "Code", sentToFirebase, sendStatus);
+}
+
+void clearOLEDAfterDelay() {
+  if (!isOLEDReady || oledDisplayTimeout == 0) return;
+
+  if ((millis() - oledDisplayTimeout) >= OLED_SCAN_DISPLAY_DURATION) {
+    oledDisplayTimeout = 0;
+    displayDeviceStatus();
+  }
 }
 
 
@@ -1032,6 +1167,7 @@ void handleApiMode() {
         Serial.println("🔄 Mode changed to: " + getModeString(currentMode));
         saveDeviceConfig(); // Simpan mode ke EEPROM
         Serial.println("📊 Mode in device config after save: " + String(deviceConfig.currentMode));
+        displayDeviceStatus();
       }
       
       DynamicJsonDocument response(512);
@@ -1102,6 +1238,7 @@ void processAttendanceBarcode(String nim) {
   // Double check if we're in attendance mode
   if (currentMode != MODE_ATTENDANCE) {
     Serial.println("❌ Cannot process attendance: Device is in " + getModeString(currentMode) + " mode");
+    displayAttendanceInfo(nim, false, "Wrong mode");
     return;
   }
   
@@ -1109,6 +1246,7 @@ void processAttendanceBarcode(String nim) {
   if (!isValidNIM(nim)) {
     Serial.println("❌ Invalid NIM format: " + nim);
     broadcastAttendanceResult(nim, false);
+    displayAttendanceInfo(nim, false, "NIM invalid");
     return;
   }
   
@@ -1128,13 +1266,16 @@ void processAttendanceBarcode(String nim) {
     if (sentToFirebase) {
       Serial.println("✅ Attendance record sent to Firebase successfully");
       broadcastAttendanceResult(nim, true);
+      displayAttendanceInfo(nim, true, "Success");
     } else {
       Serial.println("❌ Failed to send attendance record to Firebase");
       broadcastAttendanceResult(nim, false);
+      displayAttendanceInfo(nim, false, "Failed");
     }
   } else {
     Serial.println("⚠️ Not connected to WiFi or Firebase URL not configured");
     broadcastAttendanceResult(nim, false);
+    displayAttendanceInfo(nim, false, "Offline");
   }
   
   // Add to history (limit to last 20 items)
@@ -1151,6 +1292,7 @@ void processInventoryBarcode(String barcode) {
   // Double check if we're in inventory mode
   if (currentMode != MODE_INVENTORY) {
     Serial.println("❌ Cannot process inventory: Device is in " + getModeString(currentMode) + " mode");
+    displayInventoryInfo(barcode, false, "Wrong mode");
     return;
   }
   
@@ -1169,14 +1311,17 @@ void processInventoryBarcode(String barcode) {
     
     if (sentToFirebase) {
       Serial.println("✅ Inventory barcode sent to Firebase successfully");
+      displayInventoryInfo(barcode, true, "Success");
     } else {
       Serial.println("❌ Failed to send inventory barcode to Firebase");
+      displayInventoryInfo(barcode, false, "Failed");
     }
     
     // Broadcast the scan result to any connected clients
     broadcastBarcodeScan(barcode);
   } else {
     Serial.println("⚠️ Not connected to WiFi or Firebase URL not configured");
+    displayInventoryInfo(barcode, false, "Offline");
   }
   
   // Add to history (limit to last 20 items)
@@ -1400,6 +1545,7 @@ void setup() {
   Serial.begin(115200);
   Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
   delay(1000);
+  initOLED();
   
   bootTime = millis(); // Record boot time
   
@@ -1460,6 +1606,7 @@ void setup() {
   
   // Initialize heartbeat
   lastHeartbeat = millis();
+  displayDeviceStatus();
 }
 
 void loop() {
@@ -1470,6 +1617,11 @@ void loop() {
   
   // Monitor WiFi connection setiap 10 detik
   checkWiFiConnection();
+  clearOLEDAfterDelay();
+  if (oledDisplayTimeout == 0 && (millis() - lastOLEDStatusUpdate) >= OLED_STATUS_UPDATE_INTERVAL) {
+    displayDeviceStatus();
+    lastOLEDStatusUpdate = millis();
+  }
   
   // Read from Serial2 (barcode scanner)
   if (Serial2.available()) {
