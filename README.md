@@ -491,9 +491,14 @@ GET  /api/test                  # Health check
 ### **Hardware Requirements**
 - **ESP32 DevKit V1** atau compatible board
 - **Barcode Scanner Module** dengan output UART/Serial
+- **OLED SSD1306 I2C 128x64** (opsional, untuk status scan real-time)
 - **Power Supply 5V 2A** untuk ESP32 dan scanner
 - **Breadboard dan jumper wires** untuk koneksi
 - **WiFi Router** dengan akses internet
+
+### **ESP32 Library Requirements (Arduino IDE / PlatformIO)**
+- `Adafruit_SSD1306`
+- `Adafruit_GFX`
 
 ### **Wiring Diagram**
 ```
@@ -503,6 +508,13 @@ GPIO16 (RX2)   ←   TX (Data Output)
 GPIO17 (TX2)   →   RX (Data Input)  
 GND            ←   GND
 5V             ←   VCC (Power)
+
+ESP32 Pin          OLED SSD1306 (I2C)
+---------          -------------------
+GPIO21 (SDA)   ↔   SDA
+GPIO22 (SCL)   ↔   SCL
+3V3            ↔   VCC
+GND            ↔   GND
 ```
 
 ### **ESP32 Arduino Code Example**
