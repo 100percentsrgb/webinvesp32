@@ -20,6 +20,10 @@
 #define OLED_RESET -1
 #define OLED_I2C_ADDR 0x3C
 #define OLED_SCAN_DISPLAY_DURATION 3000
+#define OLED_STATUS_UPDATE_INTERVAL 2000
+#define OLED_STARTUP_DELAY 700
+#define I2C_FAST_MODE_CLOCK 400000
+#define MIN_VALID_UNIX_TIME 100000
 
 // WiFi Configuration structure
 struct WiFiConfig {
@@ -441,7 +445,7 @@ bool isValidNIM(String input) {
 
 String getCurrentTimestamp() {
   time_t now = time(nullptr);
-  if (now > 100000) {
+  if (now > MIN_VALID_UNIX_TIME) {
     struct tm timeInfo;
     localtime_r(&now, &timeInfo);
     char timeBuffer[24];
@@ -454,7 +458,7 @@ String getCurrentTimestamp() {
 
 void initOLED() {
   Wire.begin(OLED_SDA_PIN, OLED_SCL_PIN);
-  Wire.setClock(400000);
+  Wire.setClock(I2C_FAST_MODE_CLOCK);
 
   if (!oledDisplay.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDR)) {
     Serial.println("❌ OLED SSD1306 init failed");
@@ -470,7 +474,7 @@ void initOLED() {
   oledDisplay.println("ESP32 Scanner");
   oledDisplay.println("OLED Ready");
   oledDisplay.display();
-  delay(700);
+  delay(OLED_STARTUP_DELAY);
 }
 
 void displayDeviceStatus() {
@@ -1600,7 +1604,7 @@ void loop() {
   // Monitor WiFi connection setiap 10 detik
   checkWiFiConnection();
   clearOLEDAfterDelay();
-  if (oledDisplayTimeout == 0 && millis() - lastOLEDStatusUpdate > 2000) {
+  if (oledDisplayTimeout == 0 && millis() - lastOLEDStatusUpdate > OLED_STATUS_UPDATE_INTERVAL) {
     displayDeviceStatus();
     lastOLEDStatusUpdate = millis();
   }
