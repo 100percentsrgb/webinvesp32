@@ -19,11 +19,11 @@
 #define SCREEN_HEIGHT 64
 #define OLED_RESET -1
 #define OLED_I2C_ADDR 0x3C
-#define OLED_SCAN_DISPLAY_DURATION 3000
-#define OLED_STATUS_UPDATE_INTERVAL 2000
-#define OLED_STARTUP_DELAY 700
+#define OLED_SCAN_DISPLAY_DURATION 3000 // milliseconds
+#define OLED_STATUS_UPDATE_INTERVAL 2000 // milliseconds
+#define OLED_STARTUP_DELAY 700 // milliseconds
 #define I2C_FAST_MODE_CLOCK 400000
-#define MIN_VALID_UNIX_TIME 100000
+#define MIN_VALID_UNIX_TIME 1000000000
 
 // WiFi Configuration structure
 struct WiFiConfig {
@@ -502,6 +502,7 @@ void displayDeviceStatus() {
 
 void displayBarcodeScan(String code, String type, bool sentToFirebase, String sendStatus) {
   if (!isOLEDReady) return;
+  String finalSendStatus = sendStatus.length() > 0 ? sendStatus : (sentToFirebase ? "Success" : "Failed");
 
   oledDisplay.clearDisplay();
   oledDisplay.setTextSize(1);
@@ -516,7 +517,7 @@ void displayBarcodeScan(String code, String type, bool sentToFirebase, String se
   oledDisplay.print("Time: ");
   oledDisplay.println(getCurrentTimestamp());
   oledDisplay.print("Send: ");
-  oledDisplay.println(sendStatus.length() > 0 ? sendStatus : (sentToFirebase ? "Success" : "Failed"));
+  oledDisplay.println(finalSendStatus);
   oledDisplay.display();
 
   oledDisplayTimeout = millis();
@@ -1604,7 +1605,7 @@ void loop() {
   // Monitor WiFi connection setiap 10 detik
   checkWiFiConnection();
   clearOLEDAfterDelay();
-  if (oledDisplayTimeout == 0 && millis() - lastOLEDStatusUpdate > OLED_STATUS_UPDATE_INTERVAL) {
+  if (oledDisplayTimeout == 0 && (millis() - lastOLEDStatusUpdate) >= OLED_STATUS_UPDATE_INTERVAL) {
     displayDeviceStatus();
     lastOLEDStatusUpdate = millis();
   }
