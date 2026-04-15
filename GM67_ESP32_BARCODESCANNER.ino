@@ -128,6 +128,7 @@ void checkWiFiConnection(); // Tambahkan fungsi monitoring WiFi
 void setDeviceOffline(); // Tambahkan fungsi offline
 String getModeString(ScannerMode mode); // New: Get mode as string
 bool isValidNIM(String input); // New: Validate NIM format
+bool isFirebaseConfigured();
 String getCurrentTimestamp();
 void initOLED();
 void displayDeviceStatus();
@@ -443,6 +444,10 @@ bool isValidNIM(String input) {
   return true;
 }
 
+bool isFirebaseConfigured() {
+  return deviceConfig.firebaseUrl[0] != '\0';
+}
+
 String getCurrentTimestamp() {
   time_t now = time(nullptr);
   if (now > MIN_VALID_UNIX_TIME) {
@@ -490,7 +495,7 @@ void displayDeviceStatus() {
   oledDisplay.print("WiFi: ");
   oledDisplay.println(isWiFiConnected ? "Connected" : "Disconnected");
   oledDisplay.print("Firebase: ");
-  if (deviceConfig.firebaseUrl[0] == '\0') {
+  if (!isFirebaseConfigured()) {
     oledDisplay.println("Not set");
   } else {
     oledDisplay.println((isWiFiConnected && isOnline) ? "Connected" : "Disconnected");
@@ -503,7 +508,7 @@ void displayDeviceStatus() {
 void displayBarcodeScan(String code, String type, bool sentToFirebase, String sendStatus) {
   if (!isOLEDReady) return;
   String finalSendStatus = sendStatus;
-  if (finalSendStatus.length() == 0) {
+  if (finalSendStatus.isEmpty()) {
     finalSendStatus = sentToFirebase ? "Success" : "Failed";
   }
 
@@ -537,7 +542,7 @@ void displayInventoryInfo(String barcode, bool sentToFirebase, String sendStatus
 void clearOLEDAfterDelay() {
   if (!isOLEDReady || oledDisplayTimeout == 0) return;
 
-  if (millis() - oledDisplayTimeout >= OLED_SCAN_DISPLAY_DURATION) {
+  if ((unsigned long)(millis() - oledDisplayTimeout) >= OLED_SCAN_DISPLAY_DURATION) {
     oledDisplayTimeout = 0;
     displayDeviceStatus();
   }
@@ -1608,7 +1613,7 @@ void loop() {
   // Monitor WiFi connection setiap 10 detik
   checkWiFiConnection();
   clearOLEDAfterDelay();
-  if (oledDisplayTimeout == 0 && (millis() - lastOLEDStatusUpdate) >= OLED_STATUS_UPDATE_INTERVAL) {
+  if (oledDisplayTimeout == 0 && (unsigned long)(millis() - lastOLEDStatusUpdate) >= OLED_STATUS_UPDATE_INTERVAL) {
     displayDeviceStatus();
     lastOLEDStatusUpdate = millis();
   }
